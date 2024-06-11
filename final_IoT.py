@@ -1,24 +1,31 @@
+import os
 from gpiozero import Motor
 from smbus2 import SMBus
 from time import sleep
 import sys
 import paho.mqtt.client as mqtt
+import firebase_admin
+from firebase_admin import credentials, db
+import urllib.request
 
 class Final():
-    def __init__(self):
+    def __init__(self, user_id):
         # 모터설정
         self.dc_motor = Motor(forward=20, backward=21) #pin 38,40
-
         # Initialize I2C
         self.bus_number = 1  
         self.bus = SMBus(bus_number)
         self.arduino_address = 0x08 #pin 3-a4, pin5-a5, gnd-gnd
-
         # MQTT 설정
         self.MQTT_BROKER = "192.168.1.100"  # MQTT 브로커 IP 주소
         self.MQTT_PORT = 1883                # MQTT 브로커 포트
         self.MQTT_TOPIC = "weight/set"       # 안드로이드에서 전송할 MQTT 주제
-
+        
+        self.user_id = user_id
+        self.cred = credentials.Certificate('library/doggy-dine-firebase-adminsdk-6tcsx-e66d564d1b.json')
+        firebase_admin.initialize_app(self.cred, {'databaseURL' : "https://doggy-dine-default-rtdb.firebaseio.com/"})
+        self.doggydine_ref = db.reference('/DoggyDine/UserAccount')
+        self.Done = False
         self.target_weight = None
 
     def rotate_motor_forward(self):
@@ -54,6 +61,10 @@ class Final():
         print(f"Received target weight: {target_weight}")
         self.rotate_motor_backward()
 
+    def get_target(self):
+        target = self.doggydine_ref.child(self.user_id + '/Detected/Target_weight')
+        self.target_weight = target.get()
+
     def run(self):
         # MQTT 클라이언트 설정
         client = mqtt.Client()
@@ -82,7 +93,7 @@ class Final():
 
 
 def main():
-    run = Final()
+    run = Final(user_id)
     run.run()
 
 if __name__ == '__main__':
